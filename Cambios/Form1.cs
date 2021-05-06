@@ -1,18 +1,15 @@
-﻿
-
-namespace Cambios
+﻿namespace Cambios
 {
     using Cambios.Servicos;
     using Modelos;
-    using Newtonsoft.Json;
     using System;
     using System.Collections.Generic;
-    using System.Net.Http;
     using System.Threading.Tasks;
     using System.Windows.Forms;
 
     public partial class Form1 : Form
     {
+
 
         #region Atributos
 
@@ -22,6 +19,10 @@ namespace Cambios
 
         private List<Rate> Rates;
 
+        private DialogService dialogservice;
+
+        private DataService dataService;
+
         #endregion
 
         public Form1()
@@ -29,6 +30,8 @@ namespace Cambios
             InitializeComponent();
             networkService = new NetworkService();
             apiService = new APIService();
+            dialogservice = new DialogService();
+            dataService = new DataService();
             LoadRates();
         }
 
@@ -44,7 +47,6 @@ namespace Cambios
             {
                 LoadLocalRates();
                 load = false;
-                return;
             }
             else
             {
@@ -57,6 +59,10 @@ namespace Cambios
                 lbl_resultado.Text = "Não há ligação à Internet" + Environment.NewLine +
                     "e não foram previamente carregadas as taxas." + Environment.NewLine +
                     "Por favor tente mais tarde";
+                
+
+                lbl_status.Text = "Primeira inicialização deverá ter à internet";
+
                 return;
             }
 
@@ -67,10 +73,8 @@ namespace Cambios
             //corrige bug da Microsoft
             cb_destino.BindingContext = new BindingContext();
 
-            cb_destino.DataSource = Rates;
+            cb_destino.DataSource = Rates; 
             cb_destino.DisplayMember = "Name";
-
-            btn_convert.Enabled = true;
 
             lbl_resultado.Text = "Taxas atualizadas...";
 
@@ -85,11 +89,14 @@ namespace Cambios
 
             progressBar1.Value = 100;
 
+            btn_convert.Enabled = true;
+            btn_troca.Enabled = true;
+
         }
 
         private void LoadLocalRates()
         {
-            throw new NotImplementedException();
+            Rates = dataService.GetData();
         }
 
         private async Task LoadApiRates()
@@ -100,7 +107,64 @@ namespace Cambios
 
             Rates = (List<Rate>)response.Result;
 
-            progressBar1.Value = 100;
+            dataService.DeleteData();
+
+            dataService.SaveData(Rates);
+
+        }
+
+        private void btn_convert_Click(object sender, EventArgs e)
+        {
+            Converter();
+        }
+
+        private void Converter()
+        {
+            if (string.IsNullOrEmpty(tb_valor.Text))
+            {
+                dialogservice.ShowMessage("Erro", "Insira um valor a converter");
+                return;
+            }
+
+            decimal valor;
+            if(!decimal.TryParse(tb_valor.Text, out valor))
+            {
+                dialogservice.ShowMessage("Erro de Conversão", "Valor terá que ser numérico");
+                return;
+            }
+
+            if(cb_origem.SelectedItem == null)
+            {
+                dialogservice.ShowMessage("Erro", "Tem que selecionar uma moeda a converter");
+                return;
+            }
+
+            if (cb_destino.SelectedItem == null)
+            {
+                dialogservice.ShowMessage("Erro", "Tem que selecionar uma moeda de destino");
+                return;
+            }
+
+            var taxaOrigem = (Rate)cb_origem.SelectedItem;
+
+            var taxaDestino = (Rate)cb_destino.SelectedItem;
+
+            var valorConvertido = valor / (decimal)taxaOrigem.TaxRate * (decimal)taxaDestino.TaxRate;
+
+            lbl_resultado.Text = string.Format("{0} {1:C2} = {2} {3:C2}", taxaOrigem.Code, valor, taxaDestino.Code, valorConvertido);
+        }
+
+        private void btn_troca_Click(object sender, EventArgs e)
+        {
+            Troca();
+        }
+
+        private void Troca()
+        {
+            var aux = cb_origem.SelectedItem;
+            cb_origem.SelectedItem = cb_destino.SelectedItem;
+            cb_destino.SelectedItem = aux;
+            Converter();
         }
     }
 }
